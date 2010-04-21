@@ -103,7 +103,18 @@ module Searchlogic
         def create_primary_condition(column, condition)
           column_type = columns_hash[column.to_s].type
           skip_conversion = skip_time_zone_conversion_for_attributes.include?(columns_hash[column.to_s].name.to_sym)
-          match_keyword = ::ActiveRecord::Base.connection.adapter_name == "PostgreSQL" ? "ILIKE" : "LIKE"
+          
+          match_keyword = 'LIKE'
+          comparison_column = "#{table_name}.#{column}"
+          pattern = '?'
+          
+          case ::ActiveRecord::Base.connection.adapter_name
+          when /PostgreSQL/
+            match_keyword = 'ILIKE'
+          when /OracleEnhanced/
+            comparison_column = "UPPER(#{table_name}.#{column})"
+            pattern = "UPPER(?)"
+          end
           
           scope_options = case condition.to_s
           when /^equals/
@@ -119,17 +130,17 @@ module Searchlogic
           when /^greater_than/
             scope_options(condition, column_type, "#{table_name}.#{column} > ?", :skip_conversion => skip_conversion)
           when /^like/
-            scope_options(condition, column_type, "#{table_name}.#{column} #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :like)
+            scope_options(condition, column_type, "#{comparison_column} #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :like)
           when /^not_like/
-            scope_options(condition, column_type, "#{table_name}.#{column} NOT #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :like)
+            scope_options(condition, column_type, "#{comparison_column} NOT #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :like)
           when /^begins_with/
-            scope_options(condition, column_type, "#{table_name}.#{column} #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :begins_with)
+            scope_options(condition, column_type, "#{comparison_column} #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :begins_with)
           when /^not_begin_with/
-            scope_options(condition, column_type, "#{table_name}.#{column} NOT #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :begins_with)
+            scope_options(condition, column_type, "#{comparison_column} NOT #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :begins_with)
           when /^ends_with/
-            scope_options(condition, column_type, "#{table_name}.#{column} #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :ends_with)
+            scope_options(condition, column_type, "#{comparison_column} #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :ends_with)
           when /^not_end_with/
-            scope_options(condition, column_type, "#{table_name}.#{column} NOT #{match_keyword} ?", :skip_conversion => skip_conversion, :value_modifier => :ends_with)
+            scope_options(condition, column_type, "#{comparison_column} NOT #{match_keyword} #{pattern}", :skip_conversion => skip_conversion, :value_modifier => :ends_with)
           when "null"
             {:conditions => "#{table_name}.#{column} IS NULL"}
           when "not_null"
